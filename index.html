@@ -136,6 +136,19 @@
         const SPHERE_RADIUS = 55; // Increased by 10% from 50
         const ROTATION_SPEED = 0.001; // Reduced by 60% from 0.0025
         const FINAL_TRANSITION_TIME = 47; // Seconds when animation returns to waves
+
+        const CAMERA_POSITIONS = {
+            wave: new THREE.Vector3(0, 60, 150),
+            sphere: new THREE.Vector3(0, 0, 150),
+            mountain: new THREE.Vector3(0, 60, 150)
+        };
+
+        // Keep track of camera transition
+        let isCameraTransitioning = false;
+        let cameraTransitionStartTime = 0;
+        const CAMERA_TRANSITION_DURATION = 2000; // 2 seconds for camera transition
+        let fromCameraPosition = new THREE.Vector3();
+        let toCameraPosition = new THREE.Vector3();
         
         let audioContext;
         let audioElement;
@@ -330,9 +343,10 @@
 
         function transitionToSphere() {
             currentMode = 'sphere';
-            generateSphere(50);
+            generateSphere(55); // Using larger sphere radius
             startTransition(spherePositions);
             startRotatingSphere();
+            startCameraTransition(CAMERA_POSITIONS.sphere);
         }
 
         function transitionToMountain() {
@@ -346,6 +360,7 @@
                 targetPositions[i3 + 2] = zPositions[i];
             }
             startTransition(targetPositions);
+            startCameraTransition(CAMERA_POSITIONS.mountain);
         }
 
         function transitionToWave() {
@@ -373,6 +388,15 @@
             }
             startTransition(targetPositions, true);
             stopRotatingSphere();
+            startCameraTransition(CAMERA_POSITIONS.wave);
+        }
+
+        // New camera transition function
+        function startCameraTransition(targetPosition) {
+            isCameraTransitioning = true;
+            cameraTransitionStartTime = Date.now();
+            fromCameraPosition.copy(camera.position);
+            toCameraPosition.copy(targetPosition);
         }
 
         function startTransition(targetPositionsArray, useDelays = false) {
@@ -442,6 +466,22 @@
 
             const time = currentTime * 0.001;
 
+            // Handle camera transitions
+            if (isCameraTransitioning) {
+                const elapsedTime = currentTime - cameraTransitionStartTime;
+                let t = Math.min(elapsedTime / CAMERA_TRANSITION_DURATION, 1);
+                
+                // Smooth easing function
+                t = t * t * (3 - 2 * t);
+                
+                camera.position.lerpVectors(fromCameraPosition, toCameraPosition, t);
+                camera.lookAt(0, 0, 0);
+                
+                if (t >= 1) {
+                    isCameraTransitioning = false;
+                }
+            }
+
             if (isRotatingSphere) {
                 particleSystem.rotation.y += ROTATION_SPEED; // Using slower rotation speed
             }
@@ -481,15 +521,22 @@
                     particleDelays = null;
                 }
             } else {
-                if (currentMode === 'wave') {
-                    const position = particlesGeometry.attributes.position.array;
-                    updateWaveMotion(currentTime * 0.001, position);
-                    particlesGeometry.attributes.position.needsUpdate = true;
-                }
+                if (currentMode === 'wave' && !isTransitioning) {
+                const position = particlesGeometry.attributes.position.array;
+                updateWaveMotion(currentTime * 0.001, position);
+                particlesGeometry.attributes.position.needsUpdate = true;
             }
-            
+                if (isRotatingSphere) {
+                particleSystem.rotation.y += ROTATION_SPEED;
+            }
+
+        }
             renderer.render(scene, camera);
         }
+
+        // Initialize camera at wave position
+        camera.position.copy(CAMERA_POSITIONS.wave);
+        camera.lookAt(0, 0, 0);
 
         // Handle window resizing
         window.addEventListener('resize', () => {
