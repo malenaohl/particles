@@ -16,12 +16,32 @@
             width: 100%;
             height: 100%;
         }
+        #startButton {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 15px 30px;
+            font-size: 18px;
+            background: #ffffff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            z-index: 1000;
+        }
+        #startButton.hidden {
+            display: none;
+        }
     </style>
 </head>
-<body>
-    <div id="container"></div>
-    <!-- Include Three.js -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <body>
+        <div id="container"></div>
+        <button id="startButton">Start Experience</button>
+        <audio id="backgroundAudio" preload="auto" style="display: none;">
+            <source src="https://github.com/malenaohl/particles/blob/main/Ski%20Trip%20Conversation.wav?raw=true" type="audio/wav">
+        </audio>
+       <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script>
         // Perlin Noise Implementation
         (function() {
@@ -107,8 +127,106 @@
 
             window.perlin = perlin;
         })();
+        
+        // Add debug logging
+        console.log('Script loaded');
+        
+ // Main Script
+        let audioContext;
+        let audioElement;
+        let audioStartTime;
+        let isExperienceStarted = false;
 
-        // Main Script
+        // Setup audio context
+        function initAudio() {
+            console.log('Initializing audio');
+            try {
+                audioElement = document.getElementById('backgroundAudio');
+
+                // Test if audio file is actually loaded
+                console.log('Audio element current time:', audioElement.currentTime);
+                console.log('Audio element duration:', audioElement.duration);
+                console.log('Audio element ready state:', audioElement.readyState);
+
+                // Add more detailed error handling
+                audioElement.addEventListener('error', function(e) {
+                    console.error('Audio error:', e);
+                    console.error('Audio error code:', audioElement.error.code);
+                    console.error('Audio error message:', audioElement.error.message);
+                });
+
+                audioElement.addEventListener('loadstart', function() {
+                    console.log('Audio started loading');
+                });
+
+                audioElement.addEventListener('loadeddata', function() {
+                    console.log('Audio data loaded');
+                });
+
+                audioElement.addEventListener('canplay', function() {
+                    console.log('Audio can start playing');
+                });
+
+                audioElement.addEventListener('playing', function() {
+                    console.log('Audio started playing');
+                });
+
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const source = audioContext.createMediaElementSource(audioElement);
+                source.connect(audioContext.destination);
+                console.log('Audio context initialized');
+            } catch (error) {
+                console.error('Error initializing audio:', error);
+            }
+        }
+
+        // Start button handler
+        document.getElementById('startButton').addEventListener('click', function() {
+            if (!isExperienceStarted) {
+                this.classList.add('hidden');
+                startExperience();
+            }
+        });
+
+        function startExperience() {
+            if (!isExperienceStarted) {
+                console.log('Starting experience');
+                isExperienceStarted = true;
+
+                try {
+                    initAudio();
+
+                    audioContext.resume().then(() => {
+                        console.log('Audio context resumed');
+
+                        // Force audio to load if it hasn't already
+                        audioElement.load();
+
+                        // Add a small delay before playing to ensure loading
+                        setTimeout(() => {
+                            audioElement.play().then(() => {
+                                console.log('Audio playback started');
+                                audioStartTime = Date.now();
+                                animate();
+                            }).catch(error => {
+                                console.error('Audio playback failed:', error);
+                                // Start animation even if audio fails
+                                console.log('Starting animation without audio');
+                                audioStartTime = Date.now();
+                                animate();
+                            });
+                        }, 100);
+                    });
+                } catch (error) {
+                    console.error('Error in startExperience:', error);
+                    // Fallback to start animation without audio
+                    console.log('Starting animation without audio due to error');
+                    audioStartTime = Date.now();
+                    animate();
+                }
+            }
+        }
+
         // General Setup
         const container = document.getElementById('container');
         const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -136,9 +254,8 @@
         function generateInitialWave() {
             const radius = 200; // Radius of the circular plane
             for (let i = 0; i < particleCount; i++) {
-                // Generate random angle and distance within the circle
                 const theta = Math.random() * 2 * Math.PI;
-                const r = radius * Math.sqrt(Math.random()); // Square root for uniform distribution
+                const r = radius * Math.sqrt(Math.random());
                 const x = r * Math.cos(theta);
                 const z = r * Math.sin(theta);
                 const y = Math.sin(0.1 * x) * Math.cos(0.1 * z) * 5;
@@ -171,13 +288,8 @@
                 const z = zPositions[i];
                 const radius = Math.sqrt(x * x + z * z);
 
-                // Gaussian function for radial height
                 const radialHeight = Math.exp(- (radius * radius) / (2 * sigma * sigma)) * maxHeight;
-
-                // Perlin noise for terrain variation
                 const noiseValue = perlin.noise(x * noiseScale, z * noiseScale, 0);
-
-                // Combine radial height and noise
                 const y = radialHeight + noiseValue * 30;
 
                 mountainYPositions[i] = y;
@@ -208,22 +320,14 @@
         let transitionDuration = 5000; // milliseconds
         let transitionFromPositions = null;
         let transitionToPositions = null;
-        let particleDelays = null; // For per-particle delays
+        let particleDelays = null;
+        let previousTime = 0;
 
         function transitionToSphere() {
             currentMode = 'sphere';
             generateSphere(50);
             startTransition(spherePositions);
-
-            // Start rotating slightly before the sphere is fully formed
-            setTimeout(() => {
-                startRotatingSphere();
-            }, 4000); // Start rotating after 4 seconds
-
-            // Transition to mountain after holding the sphere for a while
-            setTimeout(() => {
-                transitionToMountain();
-            }, 8000 + 5000); // 8000ms hold + 5000ms transition duration
+            startRotatingSphere();
         }
 
         function transitionToMountain() {
@@ -237,11 +341,6 @@
                 targetPositions[i3 + 2] = zPositions[i];
             }
             startTransition(targetPositions);
-
-            // Transition to waves after holding the mountain for a while
-            setTimeout(() => {
-                transitionToWave();
-            }, 8000 + 5000); // 8000ms hold + 5000ms transition duration
         }
 
         function transitionToWave() {
@@ -253,27 +352,22 @@
                 targetPositions[i3 + 1] = waveYPositions[i];
                 targetPositions[i3 + 2] = zPositions[i];
             }
-            // Compute per-particle delays based on Y positions (lower particles start moving first)
+            
             const yPositions = mountainYPositions;
             let minY = Infinity, maxY = -Infinity;
             for (let i = 0; i < particleCount; i++) {
                 if (yPositions[i] < minY) minY = yPositions[i];
                 if (yPositions[i] > maxY) maxY = yPositions[i];
             }
-            const maxDelay = 2000; // milliseconds
+            const maxDelay = 2000;
             particleDelays = new Float32Array(particleCount);
             for (let i = 0; i < particleCount; i++) {
                 const normalizedY = (yPositions[i] - minY) / (maxY - minY);
-                // Reverse the delays so lower particles start moving first
                 const delay = normalizedY * maxDelay;
                 particleDelays[i] = delay;
             }
             startTransition(targetPositions, true);
-
-            // Stop rotating after the transition is complete
-            setTimeout(() => {
-                stopRotatingSphere();
-            }, transitionDuration + maxDelay);
+            stopRotatingSphere();
         }
 
         function startTransition(targetPositionsArray, useDelays = false) {
@@ -286,12 +380,10 @@
             }
         }
 
-        // Function to update wave motion for particles in wave mode
         function updateWaveMotion(time, positionsArray) {
             for (let i = 0; i < particleCount; i++) {
                 const x = xPositions[i];
                 const z = zPositions[i];
-                // More organic wave function
                 const y =
                     Math.sin(0.02 * x + time * 0.3) * 2 +
                     Math.cos(0.015 * z + time * 0.2) * 2 +
@@ -300,20 +392,58 @@
             }
         }
 
-        // Animation Loop
-        let previousTime = 0;
+        function startRotatingSphere() {
+            isRotatingSphere = true;
+        }
 
+        function stopRotatingSphere() {
+            isRotatingSphere = false;
+            particleSystem.rotation.y = 0;
+        }
+
+        // Modified timing functions
+        function checkTimedTransitions() {
+            const elapsed = (Date.now() - audioStartTime) / 1000; // Convert to seconds
+
+            // Sphere transition at 5 seconds
+            if (elapsed >= 5 && currentMode === 'wave' && !isTransitioning) {
+                transitionToSphere();
+            }
+            // Mountain transition at 15 seconds
+            else if (elapsed >= 15 && currentMode === 'sphere' && !isTransitioning) {
+                transitionToMountain();
+            }
+            // Wave transition at 47 seconds
+            else if (elapsed >= 47 && currentMode === 'mountain' && !isTransitioning) {
+                transitionToWave();
+            }
+        }
+
+        // Animation Loop
         function animate() {
-            requestAnimationFrame(animate);
-            const currentTime = Date.now();
-            const deltaTime = currentTime - (previousTime || currentTime);
-            previousTime = currentTime;
+        if (!isExperienceStarted) {
+            console.log('Animation not started yet');
+            return;
+        }
+
+        requestAnimationFrame(animate);
+        const currentTime = Date.now();
+        const deltaTime = currentTime - (previousTime || currentTime);
+        previousTime = currentTime;
+
+        // Log first frame
+        if (!window.firstFrameLogged) {
+            console.log('First animation frame running');
+            window.firstFrameLogged = true;
+        }
+
+            checkTimedTransitions();
 
             const time = currentTime * 0.001;
 
             if (isTransitioning) {
                 const elapsedTime = currentTime - transitionStartTime;
-                let t = Math.min(elapsedTime / transitionDuration, 1); // progress from 0 to 1
+                let t = Math.min(elapsedTime / transitionDuration, 1);
 
                 const position = particlesGeometry.attributes.position.array;
                 for (let i = 0; i < particleCount; i++) {
@@ -323,18 +453,15 @@
                         const delay = particleDelays[i];
                         localT = Math.min(Math.max((elapsedTime - delay) / transitionDuration, 0), 1);
                     }
-                    // Easing function for smoother movement
-                    localT = localT * localT * (3 - 2 * localT); // Smoothstep easing
+                    localT = localT * localT * (3 - 2 * localT);
 
                     position[i3] = transitionFromPositions[i3] + (transitionToPositions[i3] - transitionFromPositions[i3]) * localT;
                     position[i3 + 1] = transitionFromPositions[i3 + 1] + (transitionToPositions[i3 + 1] - transitionFromPositions[i3 + 1]) * localT;
                     position[i3 + 2] = transitionFromPositions[i3 + 2] + (transitionToPositions[i3 + 2] - transitionFromPositions[i3 + 2]) * localT;
 
-                    // Apply wave motion to particles that have completed their transition during mountain to wave transition
                     if (currentMode === 'wave' && particleDelays && (elapsedTime - particleDelays[i]) >= transitionDuration) {
                         const x = xPositions[i];
                         const z = zPositions[i];
-                        // Apply wave motion
                         const y =
                             Math.sin(0.02 * x + time * 0.3) * 2 +
                             Math.cos(0.015 * z + time * 0.2) * 2 +
@@ -357,24 +484,11 @@
             }
 
             if (isRotatingSphere) {
-                particleSystem.rotation.y += 0.0025; // Rotate the particles for better visuals
+                particleSystem.rotation.y += 0.0025;
             }
 
             renderer.render(scene, camera);
         }
-
-        function startRotatingSphere() {
-            isRotatingSphere = true;
-        }
-
-        function stopRotatingSphere() {
-            isRotatingSphere = false;
-            particleSystem.rotation.y = 0; // Reset rotation
-        }
-
-        // Start the animation loop and initial transition
-        animate();
-        setTimeout(transitionToSphere, 8000); // Start transition after initial wave
 
         // Handle window resizing
         window.addEventListener('resize', () => {
@@ -382,6 +496,9 @@
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
+
+        document.getElementById('startButton').addEventListener('click', startExperience);
+        
     </script>
 </body>
 </html>
