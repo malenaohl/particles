@@ -136,7 +136,7 @@
         const SPHERE_RADIUS = 55; // Increased by 10% from 50
         const ROTATION_SPEED = 0.0009; // Reduced by 60% from 0.0025
         const MOUNTAIN_ROTATION_SPEED = ROTATION_SPEED / 2; // Half the rotation speed for the mountain
-        const FINAL_TRANSITION_TIME = 47; // Seconds when animation returns to waves
+        const FINAL_TRANSITION_TIME = 45; // Seconds when animation returns to waves
 
         const CAMERA_POSITIONS = {
             wave: new THREE.Vector3(0, 60, 150),
@@ -511,8 +511,8 @@
         }
 
         // Mountain variations during 31-38 second window
-        else if (elapsed >= 31 && elapsed < 38 && currentMode === 'mountain') {
-            const timeInWindow = elapsed - 31;
+        else if (elapsed >= 29 && elapsed < 38 && currentMode === 'mountain') {
+            const timeInWindow = elapsed - 29;
             const currentVariation = Math.floor(timeInWindow / 1.75); // 7 seconds / 4 variations
 
             if (currentVariation < 4 && !isTransitioning) {
