@@ -134,7 +134,7 @@
 
          // Modified parameters
         const SPHERE_RADIUS = 55; // Increased by 10% from 50
-        const ROTATION_SPEED = 0.001; // Reduced by 60% from 0.0025
+        const ROTATION_SPEED = 0.0009; // Reduced by 60% from 0.0025
         const FINAL_TRANSITION_TIME = 47; // Seconds when animation returns to waves
 
         const CAMERA_POSITIONS = {
@@ -317,12 +317,9 @@
         // Mountain shape generation with subtle variations
         function generateMountainVariation(variation) {
             const positions = new Float32Array(particleCount * 3);
-
-            // Base parameters - keeping these similar across variations
-            // to maintain mountain-like appearance
             let maxHeight, sigma, noiseScale, noiseOffset;
 
-            switch(variation) {
+            switch (variation) {
                 case 0: // Base mountain
                     maxHeight = 80;
                     sigma = 50;
@@ -348,38 +345,25 @@
                     noiseOffset = 3000;
                     break;
             }
-            // Generate mountain with consistent base shape but varying detail
-                for (let i = 0; i < particleCount; i++) {
-                    const x = xPositions[i];
-                    const z = zPositions[i];
-                    const radius = Math.sqrt(x * x + z * z);
 
-                    // Base mountain shape - consistent across variations
-                    const radialHeight = Math.exp(-(radius * radius) / (2 * sigma * sigma)) * maxHeight;
+            for (let i = 0; i < particleCount; i++) {
+                const x = xPositions[i];
+                const z = zPositions[i];
+                const radius = Math.sqrt(x * x + z * z);
 
-                    // Primary noise for major features
-                    const primaryNoise = perlin.noise(
-                        x * noiseScale + noiseOffset,
-                        z * noiseScale + noiseOffset,
-                        0
-                    );
+                const radialHeight = Math.exp(-(radius * radius) / (2 * sigma * sigma)) * maxHeight;
+                const primaryNoise = perlin.noise(x * noiseScale + noiseOffset, z * noiseScale + noiseOffset, 0);
+                const detailNoise = perlin.noise(x * (noiseScale * 2) + noiseOffset, z * (noiseScale * 2) + noiseOffset, 1000) * 0.5;
 
-                    // Secondary noise for fine detail
-                    const detailNoise = perlin.noise(
-                        x * (noiseScale * 2) + noiseOffset,
-                        z * (noiseScale * 2) + noiseOffset,
-                        1000
-                    ) * 0.5;
-
-                    const i3 = i * 3;
-                    positions[i3] = x;
-                    positions[i3 + 1] = radialHeight + (primaryNoise + detailNoise) * 20;
-                    positions[i3 + 2] = z;
-                }
-
-                return positions;
+                const i3 = i * 3;
+                positions[i3] = x;
+                positions[i3 + 1] = radialHeight + (primaryNoise + detailNoise) * 20;
+                positions[i3 + 2] = z;
             }
-        
+
+            return positions;
+        }
+
         // Generate Sphere Shape
        function generateSphere() {
             for (let i = 0; i < particleCount; i++) {
@@ -429,33 +413,49 @@
             startCameraTransition(CAMERA_POSITIONS.mountain);
         }
 
-        function transitionToWave() {
-            currentMode = 'wave';
-            const targetPositions = new Float32Array(particleCount * 3);
-            for (let i = 0; i < particleCount; i++) {
-                const i3 = i * 3;
-                targetPositions[i3] = xPositions[i];
-                targetPositions[i3 + 1] = waveYPositions[i];
-                targetPositions[i3 + 2] = zPositions[i];
+        // Modify the transitionToWave function to maintain rotation without stopping
+            function transitionToWave() {
+                currentMode = 'wave';
+                rotationSpeed = ROTATION_SPEED; // Reset rotation speed at start of transition
+
+                const targetPositions = new Float32Array(particleCount * 3);
+
+                // Calculate target wave positions
+                for (let i = 0; i < particleCount; i++) {
+                    const i3 = i * 3;
+                    targetPositions[i3] = xPositions[i];
+                    targetPositions[i3 + 1] = waveYPositions[i];
+                    targetPositions[i3 + 2] = zPositions[i];
+                }
+
+                // Calculate height-based delays for falling effect
+                const yPositions = particlesGeometry.attributes.position.array;
+                let minY = Infinity, maxY = -Infinity;
+                for (let i = 0; i < particleCount; i++) {
+                    const y = yPositions[i * 3 + 1];
+                    if (y < minY) minY = y;
+                    if (y > maxY) maxY = y;
+                }
+
+                const maxDelay = 2000;
+                particleDelays = new Float32Array(particleCount);
+                for (let i = 0; i < particleCount; i++) {
+                    const y = yPositions[i * 3 + 1];
+                    const normalizedY = (y - minY) / (maxY - minY);
+                    const delay = normalizedY * maxDelay;
+                    particleDelays[i] = delay;
+                }
+
+                startTransition(targetPositions, true);
+                startCameraTransition(CAMERA_POSITIONS.wave);
             }
-            
-            const yPositions = mountainYPositions;
-            let minY = Infinity, maxY = -Infinity;
-            for (let i = 0; i < particleCount; i++) {
-                if (yPositions[i] < minY) minY = yPositions[i];
-                if (yPositions[i] > maxY) maxY = yPositions[i];
-            }
-            const maxDelay = 2000;
-            particleDelays = new Float32Array(particleCount);
-            for (let i = 0; i < particleCount; i++) {
-                const normalizedY = (yPositions[i] - minY) / (maxY - minY);
-                const delay = normalizedY * maxDelay;
-                particleDelays[i] = delay;
-            }
-            startTransition(targetPositions, true);
-            stopRotatingSphere();
-            startCameraTransition(CAMERA_POSITIONS.wave);
-        }
+        
+            // Don't stop rotation here - let it continue until transition is complete
+    
+
+        // Add rotation transition variables
+        let isRotationTransitioning = false;
+        let transitionStartRotation = 0;
 
         // New camera transition function
         function startCameraTransition(targetPosition) {
@@ -525,12 +525,13 @@
                 }
             }
 
+        // Add a rotation transition state
+        let rotationSpeed = ROTATION_SPEED;
+        let targetRotationSpeed = ROTATION_SPEED;
+
         // Animation Loop
         function animate() {
-            if (!isExperienceStarted) {
-                console.log('Animation not started yet');
-                return;
-            }
+            if (!isExperienceStarted) return;
 
             requestAnimationFrame(animate);
             const currentTime = Date.now();
@@ -538,27 +539,30 @@
             previousTime = currentTime;
 
             checkTimedTransitions();
-
             const time = currentTime * 0.001;
 
             // Handle camera transitions
             if (isCameraTransitioning) {
                 const elapsedTime = currentTime - cameraTransitionStartTime;
                 let t = Math.min(elapsedTime / CAMERA_TRANSITION_DURATION, 1);
-                
-                // Smooth easing function
                 t = t * t * (3 - 2 * t);
-                
                 camera.position.lerpVectors(fromCameraPosition, toCameraPosition, t);
                 camera.lookAt(0, 0, 0);
-                
+
                 if (t >= 1) {
                     isCameraTransitioning = false;
                 }
             }
 
-            if (isRotatingSphere) {
-                particleSystem.rotation.y += ROTATION_SPEED; // Using slower rotation speed
+            // Handle rotation and rotation transition
+            if (currentMode !== 'wave' || isTransitioning) {
+                if (isRotationTransitioning && currentMode === 'wave') {
+                    // During transition to waves, ease out the rotation
+                    const elapsedTime = currentTime - transitionStartTime;
+                    const t = Math.min(elapsedTime / transitionDuration, 1);
+                    rotationSpeed = ROTATION_SPEED * (1 - t);
+                }
+                particleSystem.rotation.y += rotationSpeed;
             }
 
             if (isTransitioning) {
@@ -580,12 +584,11 @@
                     position[i3 + 2] = transitionFromPositions[i3 + 2] + (transitionToPositions[i3 + 2] - transitionFromPositions[i3 + 2]) * localT;
 
                     if (currentMode === 'wave' && particleDelays && (elapsedTime - particleDelays[i]) >= transitionDuration) {
-                        const x = xPositions[i];
-                        const z = zPositions[i];
-                        const y =
-                            Math.sin(0.02 * x + time * 0.3) * 2 +
-                            Math.cos(0.015 * z + time * 0.2) * 2 +
-                            Math.sin(0.05 * (x + z) + time * 0.5) * 1;
+                        const x = position[i3];
+                        const z = position[i3 + 2];
+                        const y = Math.sin(0.02 * x + time * 0.3) * 2 +
+                                 Math.cos(0.015 * z + time * 0.2) * 2 +
+                                 Math.sin(0.05 * (x + z) + time * 0.5) * 1;
                         position[i3 + 1] = y;
                     }
                 }
@@ -593,22 +596,21 @@
 
                 if (t >= 1 && (!particleDelays || elapsedTime >= transitionDuration + Math.max(...particleDelays))) {
                     isTransitioning = false;
+                    isRotationTransitioning = false;
                     particleDelays = null;
+                    if (currentMode === 'wave') {
+                        particleSystem.rotation.y = 0;
+                    }
                 }
-            } else {
-                if (currentMode === 'wave' && !isTransitioning) {
+            } else if (currentMode === 'wave') {
                 const position = particlesGeometry.attributes.position.array;
-                updateWaveMotion(currentTime * 0.001, position);
+                updateWaveMotion(time, position);
                 particlesGeometry.attributes.position.needsUpdate = true;
             }
-                if (isRotatingSphere) {
-                particleSystem.rotation.y += ROTATION_SPEED;
-            }
 
-        }
             renderer.render(scene, camera);
         }
-
+        
         // Initialize camera at wave position
         camera.position.copy(CAMERA_POSITIONS.wave);
         camera.lookAt(0, 0, 0);
