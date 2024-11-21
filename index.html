@@ -135,6 +135,7 @@
          // Modified parameters
         const SPHERE_RADIUS = 55; // Increased by 10% from 50
         const ROTATION_SPEED = 0.0009; // Reduced by 60% from 0.0025
+        const MOUNTAIN_ROTATION_SPEED = ROTATION_SPEED / 2; // Half the rotation speed for the mountain
         const FINAL_TRANSITION_TIME = 47; // Seconds when animation returns to waves
 
         const CAMERA_POSITIONS = {
@@ -448,6 +449,8 @@
 
                 startTransition(targetPositions, true);
                 startCameraTransition(CAMERA_POSITIONS.wave);
+                isRotationTransitioning = true;
+                transitionStartRotation = rotationSpeed; // Set up for easing out rotation
             }
         
             // Don't stop rotation here - let it continue until transition is complete
@@ -556,11 +559,14 @@
 
             // Handle rotation and rotation transition
             if (currentMode !== 'wave' || isTransitioning) {
+                if (currentMode === 'mountain') {
+                    rotationSpeed = MOUNTAIN_ROTATION_SPEED; // Set mountain rotation speed
+                }
                 if (isRotationTransitioning && currentMode === 'wave') {
                     // During transition to waves, ease out the rotation
                     const elapsedTime = currentTime - transitionStartTime;
                     const t = Math.min(elapsedTime / transitionDuration, 1);
-                    rotationSpeed = ROTATION_SPEED * (1 - t);
+                    rotationSpeed = transitionStartRotation * (1 - t);
                 }
                 particleSystem.rotation.y += rotationSpeed;
             }
