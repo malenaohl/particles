@@ -314,6 +314,72 @@
             }
         }
 
+        // Mountain shape generation with subtle variations
+        function generateMountainVariation(variation) {
+            const positions = new Float32Array(particleCount * 3);
+
+            // Base parameters - keeping these similar across variations
+            // to maintain mountain-like appearance
+            let maxHeight, sigma, noiseScale, noiseOffset;
+
+            switch(variation) {
+                case 0: // Base mountain
+                    maxHeight = 80;
+                    sigma = 50;
+                    noiseScale = 0.03;
+                    noiseOffset = 0;
+                    break;
+                case 1: // Slightly taller, more defined ridges
+                    maxHeight = 85;
+                    sigma = 48;
+                    noiseScale = 0.035;
+                    noiseOffset = 1000;
+                    break;
+                case 2: // Wider base, smoother slopes
+                    maxHeight = 78;
+                    sigma = 55;
+                    noiseScale = 0.025;
+                    noiseOffset = 2000;
+                    break;
+                case 3: // More detailed surface features
+                    maxHeight = 82;
+                    sigma = 52;
+                    noiseScale = 0.033;
+                    noiseOffset = 3000;
+                    break;
+            }
+            // Generate mountain with consistent base shape but varying detail
+                for (let i = 0; i < particleCount; i++) {
+                    const x = xPositions[i];
+                    const z = zPositions[i];
+                    const radius = Math.sqrt(x * x + z * z);
+
+                    // Base mountain shape - consistent across variations
+                    const radialHeight = Math.exp(-(radius * radius) / (2 * sigma * sigma)) * maxHeight;
+
+                    // Primary noise for major features
+                    const primaryNoise = perlin.noise(
+                        x * noiseScale + noiseOffset,
+                        z * noiseScale + noiseOffset,
+                        0
+                    );
+
+                    // Secondary noise for fine detail
+                    const detailNoise = perlin.noise(
+                        x * (noiseScale * 2) + noiseOffset,
+                        z * (noiseScale * 2) + noiseOffset,
+                        1000
+                    ) * 0.5;
+
+                    const i3 = i * 3;
+                    positions[i3] = x;
+                    positions[i3 + 1] = radialHeight + (primaryNoise + detailNoise) * 20;
+                    positions[i3 + 2] = z;
+                }
+
+                return positions;
+            }
+        
         // Generate Sphere Shape
        function generateSphere() {
             for (let i = 0; i < particleCount; i++) {
@@ -431,24 +497,33 @@
         }
 
         // Modified timing functions
-            function checkTimedTransitions() {
-            const elapsed = (Date.now() - audioStartTime) / 1000; // Convert to seconds
+        function checkTimedTransitions() {
+        const elapsed = (Date.now() - audioStartTime) / 1000;
 
-            // Sphere transition at 5 seconds
-            if (elapsed >= 5 && currentMode === 'wave' && !isTransitioning) {
-                transitionToSphere();
-            }
-            // Mountain transition at 15 seconds
-            else if (elapsed >= 15 && currentMode === 'sphere' && !isTransitioning) {
-                transitionToMountain();
-            }
-            // Final wave transition at 50 seconds
-            else if (elapsed >= FINAL_TRANSITION_TIME && currentMode === 'mountain' && !isTransitioning) {
-                transitionToWave();
-                // Don't allow any more transitions after this point
-                checkTimedTransitions = function() {}; // Override function to do nothing
+        if (elapsed >= 5 && currentMode === 'wave' && !isTransitioning) {
+            transitionToSphere();
+        }
+        else if (elapsed >= 15 && currentMode === 'sphere' && !isTransitioning) {
+            transitionToMountain();
+        }
+
+        // Mountain variations during 31-38 second window
+        else if (elapsed >= 31 && elapsed < 38 && currentMode === 'mountain') {
+            const timeInWindow = elapsed - 31;
+            const currentVariation = Math.floor(timeInWindow / 1.75); // 7 seconds / 4 variations
+
+            if (currentVariation < 4 && !isTransitioning) {
+                const nextPositions = generateMountainVariation(currentVariation);
+                startTransition(nextPositions);
+                transitionDuration = 1500; // 1.5s transitions
             }
         }
+             // Final transition to waves
+        else if (elapsed >= FINAL_TRANSITION_TIME && currentMode === 'mountain' && !isTransitioning) {
+                    transitionToWave();
+                    checkTimedTransitions = function() {};
+                }
+            }
 
         // Animation Loop
         function animate() {
